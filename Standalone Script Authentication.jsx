@@ -1,98 +1,156 @@
-var appName = "Your credentials";
-var ownerId = "your Credentials";
-var appVer = "your credentials";
 
-// ... (getHWID and performKeyAuth functions remain the same as before) ...
-//Authentication initialization
-function main() {
+
+var appName = "Your API";
+var ownerId = "Your API";
+var appVer = "Your API";
+
+// --- CORE LOGIC: HARDWARE ID ---
+function getHWID() {
+    try {
+        var cmd = 'wmic csproduct get uuid';
+        var output = system.callSystem(cmd);
+        var lines = output.split("\n");
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].replace(/\s+/g, "");
+            if (line !== "" && line.toUpperCase().indexOf("UUID") === -1) {
+                return line;
+            }
+        }
+    } catch (e) { /* Fallback */ }
+    return "unknown_hwid";
+}
+
+// --- CORE LOGIC: KEYAUTH PROTOCOL ---
+function performKeyAuth(username, password, win) {
+    var userHWID = getHWID();
+
+    // 1. INIT SESSION
+    var initCmd = 'curl -s -X POST "https://keyauth.win/api/1.2/" ' +
+                  '-d "type=init" -d "name=' + appName + '" ' +
+                  '-d "ownerid=' + ownerId + '" -d "version=' + appVer + '"';
+    var initRes = system.callSystem(initCmd);
+    
+    var sessionid = "";
+    if (initRes.indexOf('"sessionid":"') > -1) {
+        sessionid = initRes.split('"sessionid":"')[1].split('"')[0];
+    }
+
+    if (sessionid === "") return false;
+
+    // 2. LOGIN REQUEST
+    var loginCmd = 'curl -s -X POST "https://keyauth.win/api/1.2/" ' +
+                   '-d "type=login" -d "username=' + username + '" ' +
+                   '-d "pass=' + password + '" -d "hwid=' + userHWID + '" ' +
+                   '-d "sessionid=' + sessionid + '" -d "name=' + appName + '" ' +
+                   '-d "ownerid=' + ownerId + '"';
+    var loginRes = system.callSystem(loginCmd);
+
+    return (loginRes.indexOf('"success":true') > -1);
+}
+
+// --- UI: LOGIN WINDOW ---
+function runLogin() {
     var loginWin = new Window("palette", "Dummy Script", undefined);
     loginWin.orientation = "column";
     loginWin.spacing = 15;
-    loginWin.margins = 25;
+    loginWin.margins = 30;
 
-    // Header
-    var title = loginWin.add("statictext", undefined, "Dummy Script Concept");
-    title.graphics.font = ScriptUI.newFont("Tahoma", "Bold", 18);
+    // Styling the Title
+    var title = loginWin.add("statictext", undefined, "Dummy Script 2026");
+    title.graphics.font = ScriptUI.newFont("Tahoma", "Bold", 20);
 
-    // Inputs
-    var inputGroup = loginWin.add("group");
-    inputGroup.orientation = "column";
-    inputGroup.alignChildren = ["left", "center"];
-    
-    inputGroup.add("statictext", undefined, "Username");
-    var u = inputGroup.add("edittext", [0, 0, 180, 25], "");
-    
-    inputGroup.add("statictext", undefined, "Password");
-    var p = inputGroup.add("edittext", [0, 0, 180, 25], "", {passwordCharacter: "*"});
+    var group = loginWin.add("group");
+    group.orientation = "column";
+    group.alignChildren = ["left", "center"];
+    group.spacing = 5;
 
-    // Animated Elements
-    var loginBtn = loginWin.add("button", [0, 0, 180, 35], "LOGIN");
+    group.add("statictext", undefined, "Username:");
+    var u = group.add("edittext", [0, 0, 200, 25], "");
     
-    // Hidden progress bar that appears on click
-    var progBar = loginWin.add("progressbar", [0, 0, 180, 10], 0, 100);
+    group.add("statictext", undefined, "Password:");
+    var p = group.add("edittext", [0, 0, 200, 25], "", {passwordCharacter: "*"});
+
+    var loginBtn = loginWin.add("button", [0, 0, 200, 40], "LOGIN");
+    
+    // Animation Element
+    var progBar = loginWin.add("progressbar", [0, 0, 200, 8], 0, 100);
     progBar.visible = false;
 
-    var statusMsg = loginWin.add("statictext", undefined, "");
-    statusMsg.graphics.foregroundColor = statusMsg.graphics.newPen(loginWin.graphics.PenType.SOLID_COLOR, [0.5, 0.5, 0.5], 1);
-
     loginBtn.onClick = function() {
-        // --- START ANIMATION ---
-        loginBtn.enabled = false;
-        loginBtn.text = "AUTHENTICATING...";
-        progBar.visible = true;
-        
-        // Fake "smooth" loading start
-        for (var i = 0; i <= 30; i++) {
-            progBar.value = i;
-            loginWin.update(); // Forces the UI to refresh
+        if (u.text === "" || p.text === "") {
+            alert("Please enter credentials.");
+            return;
         }
 
-        // Perform actual Auth
+        // Elegant Animation Start
+        loginBtn.enabled = false;
+        loginBtn.text = "CONNECTING...";
+        progBar.visible = true;
+        
+        // Simulated smooth ramp up
+        for (var i = 0; i < 35; i++) {
+            progBar.value = i;
+            loginWin.update();
+        }
+
         if (performKeyAuth(u.text, p.text)) {
-            // Success "Animation"
-            for (var i = 31; i <= 100; i++) {
-                progBar.value = i;
-                if(i == 60) loginBtn.text = "ACCESS GRANTED";
+            // Finish Animation
+            for (var j = 36; j <= 100; j++) {
+                progBar.value = j;
+                if (j === 70) loginBtn.text = "VERIFIED";
                 loginWin.update();
             }
-            
-            $.sleep(500); // Small pause for elegance
+            $.sleep(400); 
             loginWin.close();
             showPluginUI(u.text);
         } else {
-            // Reset on failure
+            // Reset UI on failure
             progBar.visible = false;
             loginBtn.enabled = true;
             loginBtn.text = "LOGIN";
-            alert("Authentication Failed.");
+            alert("Invalid Login or HWID error.");
         }
     };
 
     loginWin.center();
     loginWin.show();
 }
-//your main plugin code here
-// --- DUMMY PLUGIN UI ---
+
+// --- UI: DUMMY PLUGIN PAGE ---
 function showPluginUI(user) {
-    var pluginWin = new Window("palette", "Dummy Authentication", undefined);
+    var pluginWin = new Window("palette", "Dummy Script", undefined);
     pluginWin.orientation = "column";
     pluginWin.alignChildren = ["fill", "top"];
     pluginWin.spacing = 15;
-    pluginWin.margins = 20;
+    pluginWin.margins = 25;
 
-    pluginWin.add("statictext", undefined, "User: " + user.toUpperCase());
-    pluginWin.add("statictext", undefined, "Status: Authenticated (Premium)");
+    var welcome = pluginWin.add("statictext", undefined, "Welcome, " + user.toUpperCase());
+    welcome.graphics.font = ScriptUI.newFont("Tahoma", "Bold", 14);
     
-    var divider = pluginWin.add("panel", [0,0,200,2]); // Visual line
+    pluginWin.add("statictext", undefined, "Status: Premium License Active");
     
-    var btn1 = pluginWin.add("button", undefined, "Dummy Button");
-    var btn2 = pluginWin.add("button", undefined, "Dummy Button 1");
-    
-    btn1.onClick = function() { alert("Executing"); };
-    btn2.onClick = function() { alert("Executing 1"); };
+    var panel = pluginWin.add("panel", undefined, "Example");
+    panel.orientation = "column";
+    panel.margins = 15;
+    panel.spacing = 10;
+
+    var btnBase = panel.add("button", undefined, "Example 1");
+    var btnRS = panel.add("button", undefined, "Example 2");
+    var btnReset = panel.add("button", undefined, "Example 3");
+
+    btnBase.onClick = function() { alert("Done"); };
+    btnRS.onClick = function() { alert("Done"); };
+    btnReset.onClick = function() { alert("Done"); };
+
+    var logoutBtn = pluginWin.add("button", undefined, "LOGOUT");
+    logoutBtn.onClick = function() {
+        pluginWin.close();
+        runLogin();
+    };
 
     pluginWin.center();
     pluginWin.show();
 }
 
-main();
+// Start the application
+runLogin();
